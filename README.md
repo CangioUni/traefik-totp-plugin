@@ -17,6 +17,7 @@ A Traefik middleware plugin that adds TOTP (Time-based One-Time Password) authen
 
 ### Using Traefik Pilot (Recommended)
 
+⚠️ The integration with Traefik Pilot is not verified
 Add the plugin to your Traefik static configuration:
 
 ```yaml
@@ -24,20 +25,33 @@ Add the plugin to your Traefik static configuration:
 experimental:
   plugins:
     totp-auth:
-      moduleName: github.com/yourusername/traefik-totp-auth
-      version: v1.0.0
+      moduleName: github.com/CangioUni/traefik-totp-plugin
+      version: v0.1.0
 ```
 
 ### Local Development
+Add the plugin to your Traefik static configuration:
 
-1. Clone this repository into your Traefik plugins directory
-2. Build and test locally
+```yaml
+# traefik.yml
+experimental:
+  localPlugins:
+    totp-auth:
+      moduleName: github.com/CangioUni/traefik-totp-plugin
+```
+
+```yaml
+cd traefik/plugins
+git clone https://github.com/CangioUni/traefik-totp-plugin.git
+```
 
 ## Configuration
 
 ### Generate a TOTP Secret
 
-First, you need to generate a TOTP secret key. You can use Python, an online generator, or this command:
+First, you need to generate a TOTP secret key. You can use an online generator like: https://totp.danhersam.com/
+
+Otherwise, if you have Python installed, run this command:
 
 ```bash
 # Using Python
