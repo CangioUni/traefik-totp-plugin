@@ -1,6 +1,8 @@
 displayName: TOTP Authentication Plugin
 type: middleware
 
+import: github.com/CangioUni/traefik-totp-plugin
+
 summary: 'Secure your services with TOTP (Time-based One-Time Password) authentication'
 
 testData:
