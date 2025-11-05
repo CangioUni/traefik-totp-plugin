@@ -1,0 +1,78 @@
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik-totp-demo
+    command:
+      # Enable API and dashboard
+      - --api.insecure=true
+      
+      # Enable Docker provider
+      - --providers.docker=true
+      - --providers.docker.exposedbydefault=false
+      
+      # Enable file provider for dynamic config
+      - --providers.file.filename=/config/dynamic.yml
+      - --providers.file.watch=true
+      
+      # Configure plugin
+      - --experimental.plugins.totp-auth.modulename=github.com/yourusername/traefik-totp-auth
+      - --experimental.plugins.totp-auth.version=v1.0.0
+      
+      # Entry points
+      - --entrypoints.web.address=:80
+      - --entrypoints.websecure.address=:443
+      
+      # Logging
+      - --log.level=INFO
+      - --accesslog=true
+    
+    ports:
+      - "80:80"
+      - "443:443"
+      - "8080:8080"  # Traefik dashboard
+    
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - ./config:/config:ro
+      - ./plugins-local:/plugins-local:ro  # For local plugin development
+    
+    networks:
+      - traefik-network
+    
+    environment:
+      # Optional: Use environment variables for secrets
+      - TOTP_SECRET=${TOTP_SECRET:-JBSWY3DPEHPK3PXP}
+
+  # Example application protected by TOTP
+  whoami:
+    image: traefik/whoami
+    container_name: whoami-demo
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.whoami.rule=Host(`localhost`) || Host(`whoami.localhost`)"
+      - "traefik.http.routers.whoami.entrypoints=web"
+      - "traefik.http.routers.whoami.middlewares=totp-auth"
+      - "traefik.http.services.whoami.loadbalancer.server.port=80"
+    networks:
+      - traefik-network
+
+  # Example: Protected web application
+  nginx-demo:
+    image: nginx:alpine
+    container_name: nginx-demo
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.nginx.rule=Host(`app.localhost`)"
+      - "traefik.http.routers.nginx.entrypoints=web"
+      - "traefik.http.routers.nginx.middlewares=totp-auth"
+      - "traefik.http.services.nginx.loadbalancer.server.port=80"
+    volumes:
+      - ./html:/usr/share/nginx/html:ro
+    networks:
+      - traefik-network
+
+networks:
+  traefik-network:
+    name: traefik-totp-network
