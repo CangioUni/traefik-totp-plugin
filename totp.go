@@ -1,5 +1,5 @@
 // Package traefik_totp_auth implements a Traefik middleware plugin for TOTP authentication
-package traefik_totp_auth
+package traefik_totp_plugin
 
 import (
 	"context"
