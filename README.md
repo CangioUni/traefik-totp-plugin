@@ -100,6 +100,38 @@ http:
           pageDescription: "Enter your authentication code to continue"
 ```
 
+### Configuration with Trusted Proxies
+
+If you're behind a load balancer or reverse proxy and want to enable IP validation, you need to configure trusted proxies:
+
+```yaml
+http:
+  middlewares:
+    totp-auth:
+      plugin:
+        totp-auth:
+          secretKey: "JBSWY3DPEHPK3PXP"
+          sessionExpiry: 3600
+          validateIP: true                 # Enable IP validation
+          trustedProxies:                  # Define trusted proxy IP ranges
+            - "10.0.0.0/8"                 # Private network range
+            - "172.16.0.0/12"              # Docker/Kubernetes range
+            - "192.168.0.0/16"             # Local network range
+          issuer: "MyApp"
+          accountName: "user@example.com"
+```
+
+**How Trusted Proxies Work:**
+- When a request comes from a **trusted proxy IP**, the plugin uses `X-Forwarded-For` or `X-Real-IP` headers to get the real client IP
+- When a request comes from an **untrusted IP**, the plugin uses the direct connection IP and ignores forwarded headers (security measure)
+- This prevents header spoofing while allowing proper IP validation behind load balancers
+
+**Common Trusted Proxy Ranges:**
+- **Private Networks**: `10.0.0.0/8`, `172.16.0.0/12`, `192.168.0.0/16`
+- **Docker Default**: `172.17.0.0/16`
+- **Kubernetes**: Depends on your CNI plugin (commonly `10.0.0.0/8`)
+- **Cloud Load Balancers**: Check your cloud provider's IP ranges
+
 ### Apply to a Route
 
 ```yaml
@@ -200,6 +232,7 @@ Visit: https://www.qr-code-generator.com/
 | `pageTitle` | string | "TOTP Authentication Required" | Custom page title |
 | `pageDescription` | string | "Please enter your TOTP code..." | Custom page description |
 | `validateIP` | bool | false | Enable IP validation for sessions (may break with proxies/NAT) |
+| `trustedProxies` | []string | [] | CIDR ranges of trusted proxies (e.g., ["10.0.0.0/8", "172.16.0.0/12"]) |
 
 ## How It Works
 
@@ -215,6 +248,7 @@ Visit: https://www.qr-code-generator.com/
 
 - **In-Memory Sessions**: Sessions are stored in memory only (not persisted to disk)
 - **Optional IP Validation**: Optionally tie sessions to IP addresses (disabled by default for compatibility)
+- **Trusted Proxy Support**: Only trusts forwarded headers from configured proxy IP ranges (prevents header spoofing)
 - **HttpOnly Cookies**: Session cookies are not accessible via JavaScript
 - **Secure Cookies**: Cookies only sent over HTTPS (configurable)
 - **SameSite Protection**: CSRF protection via SameSite cookie attribute
@@ -306,8 +340,16 @@ http:
 ### Session expires immediately on page refresh
 - IP validation is disabled by default to prevent this issue
 - If you enabled `validateIP: true` and users are behind proxies/NAT, their IP may change between requests
-- Solution: Keep `validateIP: false` (default) or ensure X-Forwarded-For headers are stable
-- Only enable IP validation in controlled environments with stable client IPs
+- **Solution 1**: Keep `validateIP: false` (default) for maximum compatibility
+- **Solution 2**: Configure `trustedProxies` with your proxy/load balancer IP ranges to use forwarded headers
+- **Solution 3**: Only enable IP validation in controlled environments with stable client IPs
+
+### IP validation not working behind load balancer
+- The plugin sees the load balancer's IP instead of the client's IP
+- **Solution**: Configure `trustedProxies` with your load balancer's CIDR range
+- Example: `trustedProxies: ["10.0.0.0/8", "172.16.0.0/12"]`
+- The plugin will then use `X-Forwarded-For` or `X-Real-IP` headers from trusted proxies
+- Ensure your load balancer is setting these headers correctly
 
 ## Example: Complete Setup
 

@@ -12,7 +12,7 @@ http:
           issuer: "MyApp"
           accountName: "user@example.com"
 
-    # Advanced TOTP configuration
+    # Advanced TOTP configuration with trusted proxies
     totp-advanced:
       plugin:
         totp-auth:
@@ -26,7 +26,11 @@ http:
           timeStep: 30
           codeDigits: 6
           allowedSkew: 1
-          validateIP: false                  # Set to true for stricter security (may break with proxies/NAT)
+          validateIP: true                   # Enable IP validation
+          trustedProxies:                    # Trust these proxy IP ranges
+            - "10.0.0.0/8"                   # Private network
+            - "172.16.0.0/12"                # Private network
+            - "192.168.0.0/16"               # Private network
           pageTitle: "Secure Access Required"
           pageDescription: "Please enter your authentication code"
 
@@ -41,6 +45,19 @@ http:
           accountName: "admin"
           pageTitle: "Admin Authentication"
           pageDescription: "Enter code for admin access"
+
+    # Kubernetes/Cloud configuration with load balancer
+    totp-kubernetes:
+      plugin:
+        totp-auth:
+          secretKey: "JBSWY3DPEHPK3PXP"  # Replace with your secret
+          sessionExpiry: 3600
+          validateIP: true                   # Enable IP validation
+          trustedProxies:                    # Trust load balancer/ingress IPs
+            - "10.0.0.0/8"                   # Kubernetes pod network
+            - "172.17.0.0/16"                # Docker bridge network
+          issuer: "K8s Service"
+          accountName: "user"
 
   routers:
     # Protected application
