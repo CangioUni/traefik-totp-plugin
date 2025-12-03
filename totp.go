@@ -12,6 +12,7 @@ import (
 	"fmt"
 	"html/template"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -30,9 +31,10 @@ type Config struct {
 	TimeStep        int    `json:"timeStep,omitempty"`        // Time step in seconds (default: 30)
 	CodeDigits      int    `json:"codeDigits,omitempty"`      // Number of digits in code (default: 6)
 	AllowedSkew     int    `json:"allowedSkew,omitempty"`     // Number of time steps to allow for clock skew (default: 1)
-	PageTitle       string `json:"pageTitle,omitempty"`       // Custom page title
-	PageDescription string `json:"pageDescription,omitempty"` // Custom page description
-	ValidateIP      bool   `json:"validateIP,omitempty"`      // Validate IP address for sessions (default: false)
+	PageTitle       string   `json:"pageTitle,omitempty"`       // Custom page title
+	PageDescription string   `json:"pageDescription,omitempty"` // Custom page description
+	ValidateIP      bool     `json:"validateIP,omitempty"`      // Validate IP address for sessions (default: false)
+	TrustedProxies  []string `json:"trustedProxies,omitempty"`  // CIDR ranges of trusted proxies (e.g., ["10.0.0.0/8", "172.16.0.0/12"])
 }
 
 // CreateConfig creates the default plugin configuration
@@ -52,10 +54,11 @@ func CreateConfig() *Config {
 
 // TOTPAuth is the plugin structure
 type TOTPAuth struct {
-	next     http.Handler
-	name     string
-	config   *Config
-	sessions *sessionStore
+	next           http.Handler
+	name           string
+	config         *Config
+	sessions       *sessionStore
+	trustedNetworks []*net.IPNet // Parsed CIDR networks for trusted proxies
 }
 
 // Session represents an authenticated session
@@ -100,13 +103,24 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		config.AllowedSkew = 1
 	}
 
+	// Parse trusted proxy CIDR ranges
+	var trustedNetworks []*net.IPNet
+	for _, cidr := range config.TrustedProxies {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CIDR in trustedProxies (%s): %w", cidr, err)
+		}
+		trustedNetworks = append(trustedNetworks, network)
+	}
+
 	plugin := &TOTPAuth{
-		next:   next,
-		name:   name,
-		config: config,
-		sessions: &sessionStore{
+		next:            next,
+		name:            name,
+		config:          config,
+		sessions:        &sessionStore{
 			sessions: make(map[string]*Session),
 		},
+		trustedNetworks: trustedNetworks,
 	}
 
 	// Start cleanup goroutine
@@ -314,23 +328,47 @@ func (ta *TOTPAuth) cleanupExpiredSessions(ctx context.Context) {
 
 // getClientIP extracts the client IP address from the request
 func (ta *TOTPAuth) getClientIP(req *http.Request) string {
-	// Check X-Forwarded-For header
-	if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
-		ips := strings.Split(xff, ",")
-		return strings.TrimSpace(ips[0])
+	// Extract the remote address (direct connection IP)
+	remoteIP := req.RemoteAddr
+	if idx := strings.LastIndex(remoteIP, ":"); idx != -1 {
+		remoteIP = remoteIP[:idx]
 	}
 
-	// Check X-Real-IP header
-	if xri := req.Header.Get("X-Real-IP"); xri != "" {
-		return xri
+	// Parse the remote IP
+	ip := net.ParseIP(remoteIP)
+	if ip == nil {
+		log.Printf("[%s] Failed to parse remote IP: %s", ta.name, remoteIP)
+		return remoteIP
 	}
 
-	// Use remote address
-	ip := req.RemoteAddr
-	if idx := strings.LastIndex(ip, ":"); idx != -1 {
-		ip = ip[:idx]
+	// Check if the request is from a trusted proxy
+	isTrustedProxy := false
+	for _, network := range ta.trustedNetworks {
+		if network.Contains(ip) {
+			isTrustedProxy = true
+			break
+		}
 	}
-	return ip
+
+	// If request is from a trusted proxy, check forwarded headers
+	if isTrustedProxy {
+		// Check X-Forwarded-For header (standard)
+		if xff := req.Header.Get("X-Forwarded-For"); xff != "" {
+			ips := strings.Split(xff, ",")
+			clientIP := strings.TrimSpace(ips[0])
+			log.Printf("[%s] Using X-Forwarded-For IP: %s (from trusted proxy %s)", ta.name, clientIP, remoteIP)
+			return clientIP
+		}
+
+		// Check X-Real-IP header (alternative)
+		if xri := req.Header.Get("X-Real-IP"); xri != "" {
+			log.Printf("[%s] Using X-Real-IP: %s (from trusted proxy %s)", ta.name, xri, remoteIP)
+			return xri
+		}
+	}
+
+	// Use the direct connection IP (either no trusted proxies configured, or not from trusted proxy)
+	return remoteIP
 }
 
 // showTOTPPage displays the TOTP input page
