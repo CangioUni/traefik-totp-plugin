@@ -32,6 +32,7 @@ type Config struct {
 	AllowedSkew     int    `json:"allowedSkew,omitempty"`     // Number of time steps to allow for clock skew (default: 1)
 	PageTitle       string `json:"pageTitle,omitempty"`       // Custom page title
 	PageDescription string `json:"pageDescription,omitempty"` // Custom page description
+	ValidateIP      bool   `json:"validateIP,omitempty"`      // Validate IP address for sessions (default: false)
 }
 
 // CreateConfig creates the default plugin configuration
@@ -45,6 +46,7 @@ func CreateConfig() *Config {
 		AllowedSkew:     1,
 		PageTitle:       "TOTP Authentication Required",
 		PageDescription: "Please enter your TOTP code to continue",
+		ValidateIP:      false, // Disabled by default for better compatibility
 	}
 }
 
@@ -154,14 +156,16 @@ func (ta *TOTPAuth) hasValidSession(req *http.Request) bool {
 		return false
 	}
 
-	// Verify IP address (optional security check)
-	clientIP := ta.getClientIP(req)
-	if session.IP != clientIP {
-		log.Printf("[%s] Session IP mismatch: expected %s, got %s", ta.name, session.IP, clientIP)
-		ta.sessions.mu.Lock()
-		delete(ta.sessions.sessions, cookie.Value)
-		ta.sessions.mu.Unlock()
-		return false
+	// Verify IP address if enabled (optional security check)
+	if ta.config.ValidateIP {
+		clientIP := ta.getClientIP(req)
+		if session.IP != clientIP {
+			log.Printf("[%s] Session IP mismatch: expected %s, got %s", ta.name, session.IP, clientIP)
+			ta.sessions.mu.Lock()
+			delete(ta.sessions.sessions, cookie.Value)
+			ta.sessions.mu.Unlock()
+			return false
+		}
 	}
 
 	return true
