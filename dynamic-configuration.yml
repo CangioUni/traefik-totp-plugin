@@ -26,6 +26,7 @@ http:
           timeStep: 30
           codeDigits: 6
           allowedSkew: 1
+          validateIP: false                  # Set to true for stricter security (may break with proxies/NAT)
           pageTitle: "Secure Access Required"
           pageDescription: "Please enter your authentication code"
 
@@ -35,6 +36,7 @@ http:
         totp-auth:
           secretKey: "JBSWY3DPEHPK3PXP"  # Replace with your secret
           sessionExpiry: 900                 # 15 minutes
+          validateIP: true                   # Strict IP validation for high security
           issuer: "Admin Panel"
           accountName: "admin"
           pageTitle: "Admin Authentication"

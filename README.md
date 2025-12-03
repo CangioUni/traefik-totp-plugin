@@ -11,7 +11,7 @@ A Traefik middleware plugin that adds TOTP (Time-based One-Time Password) authen
 - 🕐 **Clock Skew Tolerance**: Handles time synchronization issues
 - 🔐 **Secure Cookies**: HttpOnly, Secure, SameSite protection
 - 📱 **Mobile Friendly**: Works great on phones and tablets
-- 🌐 **IP Validation**: Optional IP-based session validation
+- 🌐 **Optional IP Validation**: Optionally tie sessions to IP addresses for extra security
 
 ## Installation
 
@@ -95,6 +95,7 @@ http:
           timeStep: 30                     # Time step in seconds
           codeDigits: 6                    # Number of digits in code
           allowedSkew: 1                   # Allow ±1 time step for clock skew
+          validateIP: false                # Set to true for stricter security (may break with proxies)
           pageTitle: "Secure Access Required"
           pageDescription: "Enter your authentication code to continue"
 ```
@@ -198,6 +199,7 @@ Visit: https://www.qr-code-generator.com/
 | `allowedSkew` | int | 1 | Number of time steps to allow for clock skew |
 | `pageTitle` | string | "TOTP Authentication Required" | Custom page title |
 | `pageDescription` | string | "Please enter your TOTP code..." | Custom page description |
+| `validateIP` | bool | false | Enable IP validation for sessions (may break with proxies/NAT) |
 
 ## How It Works
 
@@ -212,7 +214,7 @@ Visit: https://www.qr-code-generator.com/
 ## Security Features
 
 - **In-Memory Sessions**: Sessions are stored in memory only (not persisted to disk)
-- **IP Validation**: Sessions are tied to the originating IP address
+- **Optional IP Validation**: Optionally tie sessions to IP addresses (disabled by default for compatibility)
 - **HttpOnly Cookies**: Session cookies are not accessible via JavaScript
 - **Secure Cookies**: Cookies only sent over HTTPS (configurable)
 - **SameSite Protection**: CSRF protection via SameSite cookie attribute
@@ -301,10 +303,11 @@ http:
 - Check browser console for cookie errors
 - Verify `cookieDomain` is correctly set (or empty)
 
-### IP validation issues
-- If users are behind a proxy or load balancer, their IP may change
-- Consider disabling IP validation (requires code modification)
-- Ensure X-Forwarded-For or X-Real-IP headers are properly set
+### Session expires immediately on page refresh
+- IP validation is disabled by default to prevent this issue
+- If you enabled `validateIP: true` and users are behind proxies/NAT, their IP may change between requests
+- Solution: Keep `validateIP: false` (default) or ensure X-Forwarded-For headers are stable
+- Only enable IP validation in controlled environments with stable client IPs
 
 ## Example: Complete Setup
 
