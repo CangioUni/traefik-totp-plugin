@@ -75,6 +75,9 @@ http:
           sessionExpiry: 3600             # 1 hour (in seconds)
           issuer: "MyApp"                 # Name shown in authenticator app
           accountName: "user@example.com" # Account name in authenticator app
+          excludedNetworks:                # Define IP ranges to exclude from auth
+             - "127.0.0.1/32"               # Localhost
+             - "192.168.10.0/24"            # Internal admin network
 ```
 
 ### Advanced Configuration
@@ -198,6 +201,7 @@ Visit: https://www.qr-code-generator.com/
 | `allowedSkew` | int | 1 | Number of time steps to allow for clock skew |
 | `pageTitle` | string | "TOTP Authentication Required" | Custom page title |
 | `pageDescription` | string | "Please enter your TOTP code..." | Custom page description |
+| `excludedNetworks` | []string | [] | CIDR ranges of networks to exclude from auth (e.g., ["192.168.0.0/16"]) |
 
 ## How It Works
 
