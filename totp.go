@@ -35,6 +35,7 @@ type Config struct {
 	PageDescription string   `json:"pageDescription,omitempty"` // Custom page description
 	ValidateIP      bool     `json:"validateIP,omitempty"`      // Validate IP address for sessions (default: false)
 	TrustedProxies  []string `json:"trustedProxies,omitempty"`  // CIDR ranges of trusted proxies (e.g., ["10.0.0.0/8", "172.16.0.0/12"])
+	ExcludedNetworks []string `json:"excludedNetworks,omitempty"` // CIDR ranges of networks to exclude from auth (e.g., ["192.168.0.0/16"])
 }
 
 // CreateConfig creates the default plugin configuration
@@ -59,6 +60,7 @@ type TOTPAuth struct {
 	config         *Config
 	sessions       *sessionStore
 	trustedNetworks []*net.IPNet // Parsed CIDR networks for trusted proxies
+	excludedNetworks []*net.IPNet // Parsed CIDR networks for excluded clients
 }
 
 // Session represents an authenticated session
@@ -113,6 +115,16 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 		trustedNetworks = append(trustedNetworks, network)
 	}
 
+	// Parse excluded network CIDR ranges
+	var excludedNetworks []*net.IPNet
+	for _, cidr := range config.ExcludedNetworks {
+		_, network, err := net.ParseCIDR(cidr)
+		if err != nil {
+			return nil, fmt.Errorf("invalid CIDR in excludedNetworks (%s): %w", cidr, err)
+		}
+		excludedNetworks = append(excludedNetworks, network)
+	}
+
 	plugin := &TOTPAuth{
 		next:            next,
 		name:            name,
@@ -121,6 +133,7 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 			sessions: make(map[string]*Session),
 		},
 		trustedNetworks: trustedNetworks,
+		excludedNetworks: excludedNetworks,
 	}
 
 	// Start cleanup goroutine
@@ -131,6 +144,19 @@ func New(ctx context.Context, next http.Handler, config *Config, name string) (h
 
 // ServeHTTP handles the HTTP request
 func (ta *TOTPAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
+	// Check if request IP is excluded from authentication
+	if len(ta.excludedNetworks) > 0 {
+		clientIP := net.ParseIP(ta.getClientIP(req))
+		if clientIP != nil {
+			for _, network := range ta.excludedNetworks {
+				if network.Contains(clientIP) {
+					ta.next.ServeHTTP(rw, req)
+					return
+				}
+			}
+		}
+	}
+
 	// Check if user has valid session
 	if ta.hasValidSession(req) {
 		ta.next.ServeHTTP(rw, req)
@@ -138,7 +164,7 @@ func (ta *TOTPAuth) ServeHTTP(rw http.ResponseWriter, req *http.Request) {
 	}
 
 	// Check if this is a TOTP submission
-	if req.Method == http.MethodPost && req.URL.Path == req.URL.Path {
+	if req.Method == http.MethodPost {
 		ta.handleTOTPSubmission(rw, req)
 		return
 	}
