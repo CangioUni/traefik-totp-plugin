@@ -12,6 +12,7 @@ A Traefik middleware plugin that adds TOTP (Time-based One-Time Password) authen
 - 🔐 **Secure Cookies**: HttpOnly, Secure, SameSite protection
 - 📱 **Mobile Friendly**: Works great on phones and tablets
 - 🌐 **Optional IP Validation**: Optionally tie sessions to IP addresses for extra security
+- 🛑 **IP Exclusion**: Optionally bypass authentication for specific IP ranges (e.g. local networks)
 
 ## Installation
 
@@ -117,6 +118,9 @@ http:
             - "10.0.0.0/8"                 # Private network range
             - "172.16.0.0/12"              # Docker/Kubernetes range
             - "192.168.0.0/16"             # Local network range
+          excludedNetworks:                # Define IP ranges to exclude from auth
+            - "127.0.0.1/32"               # Localhost
+            - "192.168.10.0/24"            # Internal admin network
           issuer: "MyApp"
           accountName: "user@example.com"
 ```
@@ -233,6 +237,7 @@ Visit: https://www.qr-code-generator.com/
 | `pageDescription` | string | "Please enter your TOTP code..." | Custom page description |
 | `validateIP` | bool | false | Enable IP validation for sessions (may break with proxies/NAT) |
 | `trustedProxies` | []string | [] | CIDR ranges of trusted proxies (e.g., ["10.0.0.0/8", "172.16.0.0/12"]) |
+| `excludedNetworks` | []string | [] | CIDR ranges of networks to exclude from auth (e.g., ["192.168.0.0/16"]) |
 
 ## How It Works
 
