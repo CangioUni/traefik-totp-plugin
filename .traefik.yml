@@ -10,5 +10,5 @@ testData:
   sessionExpiry: 3600
   issuer: MyService
   accountName: user@example.com
-  excludedNetworks:
-    - "192.168.0.0/16"
+  trustedProxies:
+    - "10.0.0.0/8"
